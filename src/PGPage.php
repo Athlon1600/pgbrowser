@@ -120,6 +120,10 @@ class PGPage{
         }
     }
 
+    function __toString(){
+        return $this->dom->textContent;
+    }
+
     /**
      * Parse an http response into status, headers and body
      * @param string $response
