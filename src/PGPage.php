@@ -33,7 +33,7 @@ class PGPage{
      * The PGForm objects associated with the page
      * @var array
      */
-    public $_forms;
+    private $_forms;
 
     /**
      * The html title tag contents
@@ -181,7 +181,6 @@ class PGPage{
      * @return PGForm
      */
     public function forms(){
-        if(func_num_args()) return $this->_forms[func_get_arg(0)];
         return $this->_forms;
     }
 
@@ -189,8 +188,13 @@ class PGPage{
      * Return the first form
      * @return PGForm
      */
-    public function form(){
-        return $this->_forms[0];
+    public function form($index = 0)
+    {
+        if(count($this->_forms) > $index){
+            return $this->_forms[$index];
+        }
+
+        return false;
     }
 
     /**
