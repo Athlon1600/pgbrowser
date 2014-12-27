@@ -577,6 +577,12 @@ class PGForm{
     $this->initFields();    
   }
 
+  function __toString(){
+
+      return "string";
+
+  }
+
   // private methods
 
   private function initFields(){
