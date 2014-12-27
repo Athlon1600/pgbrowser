@@ -15,6 +15,8 @@ class PGForm{
      * The parent PGPage object
      */
     public $page;
+	
+	public $html;
 
     /**
      * The GrandParent PGBrowser object
@@ -59,13 +61,27 @@ class PGForm{
         if(empty($this->method)) $this->method = 'get';
         $this->enctype = strtolower($this->dom->getAttribute('enctype'));
         if(empty($this->enctype)) $this->enctype = '';
-        $this->action = phpUri::parse($this->page->url)->join($this->dom->getAttribute('action'));
+		
+		// if base[href] is set and url is relative then use that instead
+		if($page->base_href && strpos($this->dom->getAttribute('action'), '/') !== 0){
+			$this->action =  phpUri::parse($page->base_href)->join($this->dom->getAttribute('action'));
+		} else {
+			 $this->action = phpUri::parse($this->page->url)->join($this->dom->getAttribute('action'));
+		}
+		
         $this->initFields();
+		
+		// store HTML contents too
+		$this->html = $page->dom->saveHTML($dom);
     }
 
     function __toString(){
-        return $this->page->dom->saveHTML($this->dom);
+        return $this->html;
     }
+	
+	function containsHTML($html){
+		return stripos($this->html, $html) !== false;
+	}
 
     // private methods
 
@@ -134,6 +150,7 @@ class PGForm{
      */
     public function submit($headers = array()){
         $body = http_build_query($this->fields, '', '&');
+		
         switch($this->method){
             case 'get':
                 $url = $this->action .'?' . $body;
@@ -149,6 +166,8 @@ class PGForm{
                 }
             default: echo "Unknown form method: $this->method\n";
         }
+		
+		
     }
 
     /**

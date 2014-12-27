@@ -33,6 +33,8 @@ class PGBrowser{
      * @var mixed
      */
     public $ch;
+	
+	public $last_error = '';
 
     /**
      * The parser to use (phpquery/simple-html-dom)
@@ -236,7 +238,17 @@ class PGBrowser{
             if(!empty($this->lastUrl)) curl_setopt($this->ch, CURLOPT_REFERER, $this->lastUrl);
             curl_setopt($this->ch, CURLOPT_POST, false);
             $response = curl_exec($this->ch);
-
+			
+			// use effective URL instead
+			if($response){
+				$url = curl_getinfo($this->ch, CURLINFO_EFFECTIVE_URL);
+			}
+			
+			$this->last_error = curl_error($this->ch);
+			if($this->last_error){
+				return false;
+			}
+			
             $page = new PGPage($url, $this->clean($response), $this);
 
             // deal with meta refresh
@@ -298,7 +310,8 @@ if(!class_exists('phpUri')){
             preg_match_all('/^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?$/', $string ,$m);
             $this->scheme = $m[2][0];
             $this->authority = $m[4][0];
-            $this->path = $m[5][0];
+            //$this->path = $m[5][0];
+			$this->path = (empty($m[5][0]))?'/':$m[5][0];
             $this->query = $m[7][0];
             $this->fragment = $m[9][0];
         }

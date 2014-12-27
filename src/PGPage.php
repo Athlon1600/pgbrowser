@@ -10,6 +10,9 @@ class PGPage{
      * @var string
      */
     public $url;
+	
+	// base href tag should looked at when setAttribute
+	public $base_href;
 
     /**
      * The parent PGBrowser object
@@ -91,7 +94,7 @@ class PGPage{
         $this->html = $response;
         $this->parseResponse($response);
         $this->is_xml = (isset($this->headers['Content-Type']) && preg_match('/\bxml\b/i', $this->headers['Content-Type'])) ? true : false;
-
+		
         $this->browser = $browser;
         $this->dom = new DOMDocument();
         if($this->is_xml){
@@ -101,6 +104,10 @@ class PGPage{
         }
         $this->xpath = new DOMXPath($this->dom);
         $this->title = ($node = $this->xpath->query('//title')->item(0)) ? $node->nodeValue : '';
+		
+		// base href
+		$this->base_href = ($node = $this->xpath->query('//base[@href]')->item(0)) ? $node->getAttribute('href') : '';
+		
         $this->forms = array();
         foreach($this->xpath->query('//form') as $form){
             $this->_forms[] = new PGForm($form, $this);
@@ -123,6 +130,10 @@ class PGPage{
     function __toString(){
         return $this->dom->textContent;
     }
+	
+	function containsHTML($html){
+		return stripos($this->html, $html) !== false;
+	}
 
     /**
      * Parse an http response into status, headers and body
