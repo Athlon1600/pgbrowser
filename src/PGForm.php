@@ -64,7 +64,7 @@ class PGForm{
     }
 
     function __toString(){
-        return $this->dom->textContent;
+        return $this->page->dom->saveHTML($this->dom);
     }
 
     // private methods
