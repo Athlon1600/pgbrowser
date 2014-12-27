@@ -579,7 +579,7 @@ class PGForm{
 
   function __toString(){
 
-      return "string";
+      return "string 2";
 
   }
 
