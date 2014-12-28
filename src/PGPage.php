@@ -140,25 +140,30 @@ class PGPage{
      * @param string $response
      */
     function parseResponse($response){
-        // This might look weird but it needs to be mb safe.
+	
+	/*
+		// This might look weird but it needs to be mb safe.
         $fp = fopen("php://memory", 'r+');
         fputs($fp, $response);
         rewind($fp);
-
-        $line = fgets($fp);
-        while(preg_match('/connection established/i', $line)){
-            $line = fgets($fp);
-            $line = fgets($fp);
-        }
-        if(preg_match('/^HTTP\/\d\.\d (\d{3}) /', $line, $m)) $this->status = $m[1];
-
-        while($line = fgets($fp)){
-            if(!preg_match('/^(.*?): ?(.*)/', $line, $m)) break;
-            $this->headers[$m[1]] = trim($m[2]);
-        }
-
-        $this->html = $this->body = stream_get_contents($fp);
-        fclose($fp);
+	*/
+		
+		$fields = explode("\r\n", $response['headers']);
+		
+		foreach($fields as $index => $field){
+		
+			// first field is always HTTP status
+			if($index == 0 && preg_match('/^HTTP\/\d\.\d (\d{3}) /', $field, $matches)){
+				$this->status = $matches[1];
+			} else if(preg_match('/^(.*?): ?(.*)/', $field, $matches)){
+				$this->headers[$matches[1]] = trim($matches[2]);
+			}
+		}
+		
+		$this->html = $response['body'];
+		$this->body = $response['body'];
+		
+        //fclose($fp);
     }
 
     private function convertUrls(){
@@ -187,16 +192,16 @@ class PGPage{
     // public methods
 
     /**
-     * Return the nth form on the page
-     * @param int $n The nth form
-     * @return PGForm
+     * Return array of all forms on the page
+     * @return array
      */
     public function forms(){
         return $this->_forms;
     }
 
     /**
-     * Return the first form
+     * Returns the nth form on the page
+	 * @param int $index the index starting from zero
      * @return PGForm
      */
     public function form($index = 0)

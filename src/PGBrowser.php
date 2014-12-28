@@ -221,53 +221,94 @@ class PGBrowser{
         curl_setopt($this->ch, CURLOPT_HTTPHEADER, $headers);
     }
 
-    public $follow_meta_refresh = false;
+    public $follow_meta_refresh = true;
 
+	// caching is to be implemented later
+	private function doRequest($method, $url, $data = array()){
+	
+		// send request to this URL
+		curl_setopt($this->ch, CURLOPT_URL, $url);
+		
+		// are we coming off of previous page?
+		if(!empty($this->lastUrl)) curl_setopt($this->ch, CURLOPT_REFERER, $this->lastUrl);
+		
+		// is this a POST request?
+		if($method == 'POST'){
+			curl_setopt($this->ch, CURLOPT_POST, true);
+			curl_setopt($this->ch, CURLOPT_POSTFIELDS, $data);
+		} else {
+			curl_setopt($this->ch, CURLOPT_POST, false);
+			
+			// append get fields as query string
+			if($data){
+			
+				$query = http_build_query($data, '', '&');
+				$parts = parse_url($url);
+				
+				// construct new URL...
+				if(!isset($parts['path'])){
+					$url = $url.'/?'.$query;
+				} else if(isset($parts['query'])){
+					$url = $url.'&'.$query;
+				} else {
+					$url = $url.'?'.$query;
+				}
+			
+				// append query string
+				curl_setopt($this->ch, CURLOPT_URL, $url);
+			}
+		}
+		
+		// what if request fails?
+		$this->last_url = $url;
+		
+		// will return false on host not found or timeout
+		$response = curl_exec($this->ch);
+		
+		if($response){
+			
+			// use effective URL instead in case of redirect
+			$url = curl_getinfo($this->ch, CURLINFO_EFFECTIVE_URL);
+			
+			// split headers and body
+			$header_size = curl_getinfo($this->ch, CURLINFO_HEADER_SIZE);
+			$headers = substr($response, 0, $header_size);
+			$body = substr($response, $header_size);
+			
+			// in case of redirect, we only care about the latest headers from the last page
+			$temp = explode("\r\n\r\n", $headers);
+			$latest_headers = $temp[count($temp)-2];
+			
+			// dom parsing is probably more expensive... just do regex on a plain text to find possible meta redirect
+			if($this->follow_meta_refresh){
+			
+				if(preg_match('/<meta[^>]*http-equiv=["|\']refresh["|\'][^>]*/i', $body, $matches) && preg_match('/url=([^ |"|\']+)/i', $matches[0], $matches2)){
+					$refresh_url = $matches2[1];
+					
+					// call the same method asking to do all the same but to this URL
+					return $this->doRequest($method, $refresh_url, $data, $headers);
+				}
+			}
+			
+			// actual response that it send to the page is [headers, body]
+			return new PGPage($url, array('headers' => $latest_headers, 'body' => $this->clean($body)), $this);
+		}
+		
+		
+		
+		$this->last_error = curl_error($this->ch);
+		
+		return false;
+	}
+	
+	
     /**
      * Get an url
      * @param string $url
      * @return PGPage
      */
-    public function get($url) {
-        if($this->useCache && file_exists($this->cacheFilename($url))){
-            if($this->cacheExpired($url)) return $this->get($url);
-            $response = file_get_contents($this->cacheFilename($url));
-            $page = new PGPage($url, $this->clean($response), $this);
-        } else {
-            curl_setopt($this->ch, CURLOPT_URL, $url);
-            if(!empty($this->lastUrl)) curl_setopt($this->ch, CURLOPT_REFERER, $this->lastUrl);
-            curl_setopt($this->ch, CURLOPT_POST, false);
-            $response = curl_exec($this->ch);
-			
-			// use effective URL instead
-			if($response){
-				$url = curl_getinfo($this->ch, CURLINFO_EFFECTIVE_URL);
-			}
-			
-			$this->last_error = curl_error($this->ch);
-			if($this->last_error){
-				return false;
-			}
-			
-            $page = new PGPage($url, $this->clean($response), $this);
-
-            // deal with meta refresh
-            if($this->follow_meta_refresh && ($meta = $page->at('meta[http-equiv="refresh"]'))){
-                if(!preg_match('/^\d+; url=(.*)$/', $meta->content, $m)){
-                    echo "bad redirect meta: " . $meta->content;
-                } else {
-                    $url = $m[1];
-                    curl_setopt($this->ch, CURLOPT_URL, $url);
-                    if(!empty($this->lastUrl)) curl_setopt($this->ch, CURLOPT_REFERER, $this->lastUrl);
-                    curl_setopt($this->ch, CURLOPT_POST, false);
-                    $response = curl_exec($this->ch);
-                    $page = new PGPage($url, $this->clean($response), $this);
-                }
-            }
-            if($this->useCache) $this->saveCache($url, $response);
-        }
-        $this->lastUrl = $url;
-        return $page;
+    public function get($url, $data = array()){
+		return $this->doRequest('GET', $url, $data);
     }
 
     /**
@@ -277,24 +318,12 @@ class PGBrowser{
      * @param array  $headers http headers
      * @return PGPage
      */
-    public function post($url, $body, $headers = array('Content-Type: application/x-www-form-urlencoded')) {
-        if($this->useCache && file_exists($this->cacheFilename($url . $body))){
-            if($this->cacheExpired($url . $body)) return $this->post($url, $body, $headers);
-            $response = file_get_contents($this->cacheFilename($url . $body));
-            $page = new PGPage($url, $this->clean($response), $this);
-        } else {
-            $this->setHeaders($headers);
-            curl_setopt($this->ch, CURLOPT_URL, $url);
-            if(!empty($this->lastUrl)) curl_setopt($this->ch, CURLOPT_REFERER, $this->lastUrl);
-            curl_setopt($this->ch, CURLOPT_POST, true);
-            curl_setopt($this->ch, CURLOPT_POSTFIELDS, $body);
-            $response = curl_exec($this->ch);
-            $page = new PGPage($url, $this->clean($response), $this);
-            if($this->useCache) $this->saveCache($url . $body, $response);
-            if($headers) $this->setHeaders(preg_replace('/(.*?:).*/','\1', $headers)); // clear headers
-        }
-        $this->lastUrl = $url;
-        return $page;
+    public function post($url, $body){
+		
+		// do we even need this?
+		// $headers = array('Content-Type: application/x-www-form-urlencoded')
+		
+		return $this->doRequest('POST', $url, $body);
     }
 }
 
